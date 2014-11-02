@@ -59,6 +59,19 @@ The slave comes with a few command line options as outlined below:
 
 In order to improve the speed, lower the delay (*-d*) between requests or increase the size (-s) of the data buffer.
 
+## icmp-slave-complete.c : Hard coded values
+
+For the ease of execution, I have hard coded the values of target, delay, timeout, data buffer. It will help to execute the binary directly without command line arguments.
+
+Check line number 186 to 197.
+
+target: IP address of target machine
+delay: delay between requests in milliseconds
+timeout: timeout in milliseconds
+max_blanks: maximal number of blanks (unanswered icmp requests)
+max_data_size: maximal data buffer size in bytes
+
+
 ## License
 
 This source code is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 2.1 of the License, or (at your option) any later version.
