@@ -65,11 +65,11 @@ For the ease of execution, I have hard coded the values of target, delay, timeou
 
 Check line number 186 to 197.
 
-target: IP address of target machine
-delay: delay between requests in milliseconds
-timeout: timeout in milliseconds
-max_blanks: maximal number of blanks (unanswered icmp requests)
-max_data_size: maximal data buffer size in bytes
+*target: IP address of target machine
+*delay: delay between requests in milliseconds
+*timeout: timeout in milliseconds
+*max_blanks: maximal number of blanks (unanswered icmp requests)
+*max_data_size: maximal data buffer size in bytes
 
 
 ## License
