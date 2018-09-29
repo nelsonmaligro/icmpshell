@@ -184,7 +184,7 @@ int main(int argc, char **argv)
 	}
 
 	//case 't': target host ip address to send ping requests to
-	target = "192.168.1.13";
+	target = "192.168.254.110";
 	//case 'd': delay between requests in milliseconds
 	delay = 500;
 	//case 'o': timeout in milliseconds
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
 	//case 'b': maximal number of blanks (unanswered icmp requests)
 	max_blanks = 30;
 	//case 's': maximal data buffer size in bytes
-	max_data_size = 128;
+	max_data_size = 300;
 
 	ip_addr = to_ip(target);
 	// don't spawn a shell if we're only sending a single test request
