@@ -1,0 +1,1 @@
+wine c:/Python27/python.exe /usr/local/bin/pyinstaller/pyinstaller.py --onefile clientlinux.py 192.168.33.35

