@@ -4,7 +4,7 @@ block_cipher = None
 
 
 a = Analysis(['clientlinux.py'],
-             pathex=['/root/icmpsh/orig'],
+             pathex=['Z:\\root\\icmpsh\\orig'],
              binaries=[],
              datas=[],
              hiddenimports=[],
@@ -19,18 +19,14 @@ pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
 exe = EXE(pyz,
           a.scripts,
+          a.binaries,
+          a.zipfiles,
+          a.datas,
           [],
-          exclude_binaries=True,
           name='clientlinux',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
           upx=True,
-          console=True , icon='client.exe')
-coll = COLLECT(exe,
-               a.binaries,
-               a.zipfiles,
-               a.datas,
-               strip=False,
-               upx=True,
-               name='clientlinux')
+          runtime_tmpdir=None,
+          console=True )

